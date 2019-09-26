@@ -1,4 +1,5 @@
 import io
+from os.path import exists
 from paramiko import client, RSAKey
 from paramiko.channel import ChannelFile, ChannelStderrFile, Channel
 
@@ -61,6 +62,9 @@ class SSH:
     #     cls.default_pkey = RSAKey.from_private_key_file(key_file)
 
     def __init__(self, hostname: str, username: str, private_key: str, port: int = 22, timeout: float = 60.0):
+        if exists(private_key):
+            with open(private_key) as f:
+                private_key = f.read()
         pkey = RSAKey.from_private_key(io.StringIO(private_key))
 
         # if key_file is None:
