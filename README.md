@@ -31,24 +31,21 @@ from qaviton_ssh import SSH
 # private_key is the file path or string of the private key
 client = SSH(hostname='x.x.x.x', username='username', private_key='pkey.pem')
 
-response = client.send('echo "hello world"')  # server will respond with b"hello world"
-print(response.data, response.error)
+response = client.send('echo "hello world"')
+print(response.data, response.error)  # server will respond with b'hello world', b''
 ```
 
+#### create a python script on the server
 ```python
-# create a python script on the server
 cd = 'cd myproject'
 file = 'script.py'
-response = client.send_many([cd, f'touch {file}'])
+response = client.send_many([cd, f'touch {file}', f'echo "print(\"script success\")" > {file}'])
 assert not response.error
 ```  
 
+#### execute the script
 ```python
-# execute the script
-response = client.send_many([cd,
-    f'echo "print(\"script success\")" > {file}'
-    f'python {file}'])
-    
+response = client.send_many([cd, f'python {file}'])
 assert not response.error
-print(response.data)  # server will respond with b"script success"
+print(response.data)  # server will respond with b'script success'
 ```  
