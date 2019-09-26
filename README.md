@@ -33,12 +33,18 @@ client = SSH(hostname='x.x.x.x', username='username', private_key='pkey.pem')
 
 response = client.send('echo "hello world"')  # server will respond with b"hello world"
 print(response.data, response.error)
+```
 
+```python
+# create a python script on the server
 cd = 'cd myproject'
 file = 'script.py'
 response = client.send_many([cd, f'touch {file}'])
 assert not response.error
+```  
 
+```python
+# execute the script
 response = client.send_many([cd,
     f'echo "print(\"script success\")" > {file}'
     f'python {file}'])
