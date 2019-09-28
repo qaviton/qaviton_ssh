@@ -79,10 +79,10 @@ class SSH:
         # self.sftp = self.client.open_sftp()
 
     def __enter__(self): return self
-    def __exit__(self, exc_type, exc_val, exc_tb): pass
+    def __exit__(self): ...
     def __del__(self):
         try: self.close()
-        except: pass
+        except: ...
 
     # TODO: needs to be tested
     # def create_session(self):
