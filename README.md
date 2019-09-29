@@ -1,6 +1,7 @@
 # Qaviton SSH
 ![logo](https://www.qaviton.com/wp-content/uploads/logo-svg.svg)  
 [![version](https://img.shields.io/pypi/v/qaviton_ssh.svg)](https://pypi.python.org/pypi)
+[![license](https://img.shields.io/pypi/l/qaviton_ssh.svg)](https://pypi.python.org/pypi)
 [![open issues](https://img.shields.io/github/issues/qaviton/qaviton_ssh)](https://github/issues-raw/qaviton/qaviton_ssh)
 [![downloads](https://img.shields.io/pypi/dm/qaviton_ssh.svg)](https://pypi.python.org/pypi)
 ![code size](https://img.shields.io/github/languages/code-size/qaviton/qaviton_ssh)
