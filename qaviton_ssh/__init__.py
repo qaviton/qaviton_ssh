@@ -1,58 +1,66 @@
 import io
+import select
 from os.path import exists
 from paramiko import client, RSAKey
 from paramiko.channel import ChannelFile, ChannelStderrFile, Channel
 
 
-CHANNEL_RECV_BUFFER = 1024  # TODO: maybe we should calculate the system's best buffer size with some weak estimation?
-
-# && -> is a cross-platform solution that will execute the next command
-# if the previous had no errors. you may change it...
+# && -> is a cross-platform solution that will execute the next command, if the previous had no errors.
+# you may change it...
 # ; -> in linux will execute regardless of error codes
 # & -> in windows will execute regardless of error codes
 MULTI_COMMAND_OPERATOR = ' && '
 
 
 class Response:
-    def __init__(self, stdin: ChannelFile, stdout: ChannelFile, stderr: ChannelStderrFile):
+    def __init__(self, stdin: ChannelFile, stdout: ChannelFile, stderr: ChannelStderrFile, timeout):
+        # get the shared channel for stdout/stderr/stdin
         channel: Channel = stdout.channel
-        data = err = b''
-        while not channel.exit_status_ready():
+        channel.settimeout(timeout)
 
-            # collect stdout data when available
-            if channel.recv_ready():
-                # Retrieve the first CHANNEL_RECV_BUFFER bytes
-                data += channel.recv(CHANNEL_RECV_BUFFER)
-                while channel.recv_ready():
-                    # Retrieve the next CHANNEL_RECV_BUFFER bytes
-                    data += channel.recv(CHANNEL_RECV_BUFFER)
+        # we do not need stdin.
+        stdin.close()
+        # indicate that we're not going to write to that channel anymore
+        channel.shutdown_write()
 
-            # collect stderr data when available
-            if channel.recv_stderr_ready():
-                # Retrieve the first CHANNEL_RECV_BUFFER bytes
-                err += channel.recv_stderr(CHANNEL_RECV_BUFFER)
-                while channel.recv_stderr_ready():
-                    # Retrieve the next CHANNEL_RECV_BUFFER bytes
-                    err += channel.recv_stderr(CHANNEL_RECV_BUFFER)
+        # read stdout/stderr in order to prevent read block hangs
+        stdout_chunks = [stdout.channel.recv(len(stdout.channel.in_buffer))]
+        stderr_chunks = []
+        # chunked read to prevent stalls
+        while not channel.closed or channel.recv_ready() or channel.recv_stderr_ready():
+            # stop if channel was closed prematurely, and there is no data in the buffers.
+            got_chunk = False
+            readq, _, _ = select.select([stdout.channel], [], [], timeout)
+            for c in readq:
+                if c.recv_ready():
+                    stdout_chunks.append(stdout.channel.recv(len(c.in_buffer)))
+                    got_chunk = True
+                if c.recv_stderr_ready():
+                    # make sure to read stderr to prevent stall
+                    stderr_chunks.append(stderr.channel.recv_stderr(len(c.in_stderr_buffer)))
+                    got_chunk = True
+            '''
+            1) make sure that there are at least 2 cycles with no data in the input buffers in order to not exit too early (i.e. cat on a >200k file).
+            2) if no data arrived in the last loop, check if we already received the exit code
+            3) check if input buffers are empty
+            4) exit the loop
+            '''
+            if not got_chunk \
+            and stdout.channel.exit_status_ready() \
+            and not stderr.channel.recv_stderr_ready() \
+            and not stdout.channel.recv_ready():
+                # indicate that we're not going to read from this channel anymore
+                stdout.channel.shutdown_read()
+                # close the channel
+                stdout.channel.close()
+                break  # exit as remote side is finished and our buffers are empty
 
-        # collect stdout data when available
-        if channel.recv_ready():
-            # Retrieve the first CHANNEL_RECV_BUFFER bytes
-            data += channel.recv(CHANNEL_RECV_BUFFER)
-            while channel.recv_ready():
-                # Retrieve the next CHANNEL_RECV_BUFFER bytes
-                data += channel.recv(CHANNEL_RECV_BUFFER)
-
-        # collect stderr data when available
-        if channel.recv_stderr_ready():
-            # Retrieve the first CHANNEL_RECV_BUFFER bytes
-            err += channel.recv_stderr(CHANNEL_RECV_BUFFER)
-            while channel.recv_stderr_ready():
-                # Retrieve the next CHANNEL_RECV_BUFFER bytes
-                err += channel.recv_stderr(CHANNEL_RECV_BUFFER)
-
-        self.data: bytes = data
-        self.error: bytes = err
+        # close all the pseudo files
+        stdout.close()
+        stderr.close()
+        
+        self.data: bytes = b''.join(stdout_chunks)
+        self.error: bytes = b''.join(stderr_chunks)
 
 
 class SSH:
